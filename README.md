@@ -1,21 +1,187 @@
-# PGM_Project
-Multi-Disease Risk Assessment Using Probabilistic Graphical Models
+# 🏥 Multi-Disease Risk Assessment Using Probabilistic Graphical Models
 
-Project Overview
-This notebook implements a Multi-Disease Risk Assessment framework using Probabilistic Graphical Models (PGMs).
-We move beyond single-disease black-box predictions toward interpretable causal reasoning across two datasets:
 
-    Dataset	                 Disease	       Records
-    Pima Indians Diabetes	   Diabetes	         768
-    Cardiovascular Disease	 Cardio Disease	    70,000
+---
 
-Roadmap
+## 📋 Overview
 
-Step 1 →   Install & Import Libraries
-Step 2 →   Load & Explore Datasets (EDA)
-Step 3 →   Data Preprocessing & Feature Engineering
-Step 4 →   Baseline Model: Naive Bayes Classifier
-Step 5 →   Bayesian Network (Structure + Parameter Learning)
-Step 6 →   Probabilistic Inference (What-If Queries)
-Step 7 →   Model Evaluation & Comparison
-Step 8 →   Multi-Disease Risk Score (Combined Inference)
+This project implements a **Multi-Disease Risk Assessment** framework using Probabilistic Graphical Models (PGMs). Rather than relying on single-disease black-box predictions, it builds **interpretable causal reasoning** pipelines for two diseases simultaneously — Diabetes and Cardiovascular Disease — and combines them into a unified patient risk score.
+
+| Dataset | Disease | Records |
+|---|---|---|
+| Pima Indians Diabetes | Diabetes | 768 |
+| Cardiovascular Disease | Cardio Disease | 70,000 |
+
+---
+
+## 🗺️ Project Roadmap
+
+```
+Step 1 → Install & Import Libraries
+Step 2 → Load & Explore Datasets (EDA)
+Step 3 → Data Preprocessing & Feature Engineering
+Step 4 → Baseline Model: Naive Bayes Classifier
+Step 5 → Bayesian Network (Structure + Parameter Learning)
+Step 6 → Probabilistic Inference (What-If Queries)
+Step 7 → Model Evaluation & Comparison
+Step 8 → Multi-Disease Risk Score (Combined Inference)
+```
+
+---
+
+## ⚙️ Installation
+
+```bash
+pip install pgmpy scikit-learn pandas numpy matplotlib seaborn networkx
+```
+
+> If running on Google Colab, `pgmpy` is installed automatically at runtime via `!pip install pgmpy -q`.
+
+---
+
+## 📁 Required Files
+
+Place the following CSV files in the same directory as the notebook before running:
+
+| File | Description |
+|---|---|
+| `diabetes.csv` | Pima Indians Diabetes dataset (comma-separated) |
+| `cardio_train.csv` | Cardiovascular Disease dataset (**semicolon-separated**) |
+
+---
+
+## 🔬 Methodology
+
+### Step 1 — Libraries
+Core dependencies include `pgmpy` for Bayesian Networks, `scikit-learn` for preprocessing and baseline models, `networkx` for DAG visualisation, and `matplotlib`/`seaborn` for plotting. A fallback import chain handles different `pgmpy` versions (`BicScore` → `BIC` → `K2Score`).
+
+### Step 2 — Exploratory Data Analysis
+- Class balance bar charts for both datasets
+- Feature distribution histograms by class label (Diabetes vs. No Diabetes)
+- Correlation heatmaps for identifying inter-feature relationships
+
+### Step 3 — Preprocessing & Feature Engineering
+
+**Diabetes dataset:**
+- Biologically impossible zeros (`Glucose`, `BloodPressure`, `SkinThickness`, `Insulin`, `BMI`) replaced with `NaN` and imputed using **median imputation**.
+
+**Cardio dataset:**
+- Age converted from days to years
+- BMI derived from height and weight
+- Physiologically implausible blood pressure values filtered out (`ap_hi` outside 80–250, `ap_lo` outside 40–150)
+
+**Discretisation** (required for Bayesian Networks):
+
+| Feature | Bins / Categories |
+|---|---|
+| Glucose | Normal / Pre-Diabetic / Diabetic |
+| Blood Pressure | Normal / Elevated / High |
+| BMI | Underweight / Normal / Overweight / Obese |
+| Age | Young / Middle / Senior / Elderly |
+| Insulin | Low / Normal / High |
+| Diabetes Pedigree Function | Low / Moderate / High |
+| Systolic BP | Normal / Elevated / High / Crisis |
+| Cholesterol | Normal / Above Normal / High |
+
+### Step 4 — Baseline: Gaussian Naïve Bayes
+A `GaussianNB` classifier is trained on both datasets. Evaluation includes:
+- Accuracy and ROC-AUC scores
+- Confusion matrices
+- ROC curves
+- 5-Fold Stratified Cross-Validation
+
+### Step 5 — Bayesian Network (Structure + Parameter Learning)
+- **Structure learning** via `HillClimbSearch` with BIC scoring to find the optimal Directed Acyclic Graph (DAG).
+- Expert-guided edges are added where the search may miss clinically known dependencies.
+- **Parameter learning** via `BayesianEstimator` with BDeu priors (`equivalent_sample_size=5`).
+- Model validity is verified with `check_model()`.
+- Conditional Probability Tables (CPTs) are inspected to confirm learned distributions.
+
+### Step 6 — Probabilistic Inference (What-If Queries)
+Using `VariableElimination`, the models support causal queries such as:
+
+```
+Q1: P(Diabetes | High Glucose, Obese BMI)
+Q2: P(Diabetes | Normal Glucose, Normal BMI)
+Q3: P(Diabetes | Pre-Diabetic Glucose, Elderly, High DPF)
+Q4: P(Cardio   | High SBP, High Cholesterol, Senior)
+Q5: P(Cardio   | Normal SBP, Normal Cholesterol, Young)
+```
+
+A **sensitivity analysis** is also performed to measure each feature's marginal impact on disease probability.
+
+### Step 7 — Model Evaluation & Comparison
+Bayesian Network predictions are generated by running `VariableElimination` over the held-out test set, row by row. Results are compared against the Naïve Bayes baseline using Accuracy and ROC-AUC.
+
+| Model | Type | Interpretability |
+|---|---|---|
+| Naïve Bayes | Discriminative PGM | Feature likelihoods |
+| Bayesian Network | Generative PGM | Causal pathways via CPTs |
+
+### Step 8 — Multi-Disease Risk Score
+A `compute_multi_disease_risk()` function combines both BN inference engines into a single patient report:
+
+```python
+combined_score = (P(Diabetes) * P(Cardio)) ** 0.5  # Geometric mean
+```
+
+Risk is labelled into four tiers:
+
+| Score | Label |
+|---|---|
+| < 0.25 | 🟢 Low |
+| 0.25 – 0.50 | 🟡 Moderate |
+| 0.50 – 0.75 | 🟠 High |
+| ≥ 0.75 | 🔴 Critical |
+
+Three prototype patient profiles are evaluated end-to-end:
+- **Patient A** — Young, healthy, all normal indicators
+- **Patient B** — Middle-aged, overweight, elevated blood pressure
+- **Patient C** — Elderly, diabetic, hypertensive, obese
+
+---
+
+## 📊 Output Artefacts
+
+The notebook saves the following plots automatically:
+
+| File | Contents |
+|---|---|
+| `class_distribution.png` | Class balance for both datasets |
+| `diabetes_distributions.png` | Feature distributions by class (Diabetes) |
+| `correlation_heatmaps.png` | Correlation matrices for both datasets |
+| `nb_results.png` | Naïve Bayes confusion matrices & ROC curves |
+| `inference_results.png` | BN what-if inference bar chart |
+| `model_comparison.png` | Accuracy & ROC-AUC comparison across models |
+| `multi_disease_dashboard.png` | Combined risk score dashboard for all patient profiles |
+
+---
+
+## 📦 Dependencies
+
+| Library | Purpose |
+|---|---|
+| `pgmpy` | Bayesian Network structure/parameter learning & inference |
+| `scikit-learn` | Naïve Bayes, preprocessing, evaluation metrics |
+| `pandas` / `numpy` | Data manipulation |
+| `matplotlib` / `seaborn` | Visualisation |
+| `networkx` | DAG drawing |
+
+---
+
+## 💡 Key Takeaways
+
+1. **Naïve Bayes** provides a strong, fast baseline achieving ~75–82% accuracy on both datasets.
+2. **Bayesian Networks** enable *why* explanations — clinicians can trace which combination of risk factors drives the score.
+3. **What-if queries** let practitioners ask: *"If we control blood pressure, how much does cardio risk drop?"*
+4. The **combined multi-disease score** captures comorbidity patterns that single-disease models miss entirely.
+
+---
+
+## 🔭 Future Work
+
+- Learn structure entirely from data and compare BIC vs. AIC scores
+- Add a third disease dimension (kidney disease via eGFR)
+- Deploy as a patient-facing web app using **Streamlit**
+- Use **Dynamic Bayesian Networks** to model disease progression over time
+
